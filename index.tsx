@@ -10,6 +10,8 @@ const GAME_DURATION = 99;
 // --- Types ---
 type Position = { x: number; y: number };
 type Velocity = { x: number; y: number };
+type GameState = 'START' | 'STAGE_SELECT' | 'PLAYING' | 'GAMEOVER';
+type StageType = 'ROOFTOP' | 'FOREST' | 'CITY';
 
 interface AttackBox {
   position: Position;
@@ -372,7 +374,8 @@ class Sprite {
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [gameStatus, setGameStatus] = useState<'START' | 'PLAYING' | 'GAMEOVER'>('START');
+  const [gameStatus, setGameStatus] = useState<GameState>('START');
+  const [stage, setStage] = useState<StageType>('ROOFTOP');
   const [winner, setWinner] = useState<string>('');
   const [timer, setTimer] = useState(GAME_DURATION);
   
@@ -497,6 +500,123 @@ export default function App() {
           setWinner('Kenji Wins!');
       }
   };
+  
+  // --- Background Draw Functions ---
+  
+  const drawRooftop = (c: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      const gradient = c.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#2e1a47'); // Deep Purple
+      gradient.addColorStop(0.5, '#c74a4a'); // Sunset Red
+      gradient.addColorStop(1, '#ffb347'); // Orange
+      c.fillStyle = gradient;
+      c.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Sun
+      c.fillStyle = 'rgba(255, 69, 0, 0.4)';
+      c.beginPath();
+      c.arc(canvas.width / 2, canvas.height - 150, 100, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ff4500';
+      c.beginPath();
+      c.arc(canvas.width / 2, canvas.height - 150, 80, 0, Math.PI * 2);
+      c.fill();
+
+      // Skyline Silhouette
+      c.fillStyle = '#0f0f1a';
+      c.fillRect(0, canvas.height - 250, 100, 250);
+      c.fillRect(100, canvas.height - 300, 150, 300);
+      c.fillRect(300, canvas.height - 180, 200, 180);
+      c.fillRect(600, canvas.height - 320, 120, 320);
+      c.fillRect(750, canvas.height - 200, 300, 200);
+
+      // Rooftop Floor (Concrete)
+      const groundHeight = 110;
+      c.fillStyle = '#3a3a3a';
+      c.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+      
+      // Fence Pattern
+      c.strokeStyle = 'rgba(0,0,0,0.5)';
+      c.lineWidth = 2;
+      c.beginPath();
+      for(let x=0; x<canvas.width; x+=40) {
+          c.moveTo(x, canvas.height - groundHeight - 200);
+          c.lineTo(x, canvas.height - groundHeight);
+      }
+      c.stroke();
+  };
+
+  const drawForest = (c: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      // Sky
+      const gradient = c.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#87CEEB'); // Sky Blue
+      gradient.addColorStop(1, '#E0F7FA'); // Light Cyan
+      c.fillStyle = gradient;
+      c.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Distant Mountains
+      c.fillStyle = '#a8c0a8';
+      c.beginPath();
+      c.moveTo(0, canvas.height - 110);
+      c.lineTo(200, canvas.height - 400);
+      c.lineTo(400, canvas.height - 110);
+      c.fill();
+      c.beginPath();
+      c.moveTo(300, canvas.height - 110);
+      c.lineTo(600, canvas.height - 450);
+      c.lineTo(900, canvas.height - 110);
+      c.fill();
+
+      // Bamboo Stalks (Background)
+      c.fillStyle = '#556b2f';
+      for(let x=20; x<canvas.width; x+=100) {
+          c.fillRect(x, 0, 10, canvas.height - 110);
+          // Bamboo joints
+          c.fillStyle = '#334411';
+          for(let y=0; y<canvas.height; y+=60) {
+              c.fillRect(x-2, y, 14, 5);
+          }
+          c.fillStyle = '#556b2f';
+      }
+
+      // Ground
+      c.fillStyle = '#3b5323';
+      c.fillRect(0, canvas.height - 110, canvas.width, 110);
+  };
+
+  const drawCity = (c: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      // Dark Sky
+      c.fillStyle = '#050510';
+      c.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Neon Buildings
+      const colors = ['#ff00ff', '#00ffff', '#ffff00', '#00ff00'];
+      let colorIdx = 0;
+      for(let x=50; x<canvas.width; x+=150) {
+          const h = 200 + Math.random() * 200;
+          c.fillStyle = '#111';
+          c.fillRect(x, canvas.height - 110 - h, 100, h);
+          c.strokeStyle = colors[colorIdx % colors.length];
+          c.lineWidth = 2;
+          c.strokeRect(x, canvas.height - 110 - h, 100, h);
+          
+          // Windows
+          c.fillStyle = colors[colorIdx % colors.length];
+          for(let wy=canvas.height - 110 - h + 10; wy < canvas.height - 110; wy+=30) {
+             c.fillRect(x+10, wy, 10, 20);
+             c.fillRect(x+40, wy, 10, 20);
+             c.fillRect(x+70, wy, 10, 20);
+          }
+          colorIdx++;
+      }
+
+      // Ground
+      c.fillStyle = '#222';
+      c.fillRect(0, canvas.height - 110, canvas.width, 110);
+      
+      // Neon floor line
+      c.fillStyle = '#00ffff';
+      c.fillRect(0, canvas.height - 110, canvas.width, 5);
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -560,57 +680,13 @@ export default function App() {
     const animate = () => {
       gameLoopId.current = window.requestAnimationFrame(animate);
       
-      // --- Background Drawing ---
-      // Sunset Sky Gradient
-      const gradient = c.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#2e1a47'); // Deep Purple
-      gradient.addColorStop(0.5, '#c74a4a'); // Sunset Red
-      gradient.addColorStop(1, '#ffb347'); // Orange
-      c.fillStyle = gradient;
-      c.fillRect(0, 0, canvas.width, canvas.height);
+      // --- Background Selector ---
+      if (stage === 'ROOFTOP') drawRooftop(c, canvas);
+      else if (stage === 'FOREST') drawForest(c, canvas);
+      else if (stage === 'CITY') drawCity(c, canvas);
 
-      // Sun
-      c.fillStyle = 'rgba(255, 69, 0, 0.4)';
-      c.beginPath();
-      c.arc(canvas.width / 2, canvas.height - 150, 100, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#ff4500';
-      c.beginPath();
-      c.arc(canvas.width / 2, canvas.height - 150, 80, 0, Math.PI * 2);
-      c.fill();
-
-      // Skyline Silhouette
-      c.fillStyle = '#0f0f1a';
-      c.fillRect(0, canvas.height - 250, 100, 250);
-      c.fillRect(100, canvas.height - 300, 150, 300);
-      c.fillRect(300, canvas.height - 180, 200, 180);
-      c.fillRect(600, canvas.height - 320, 120, 320);
-      c.fillRect(750, canvas.height - 200, 300, 200);
-
-      // Rooftop Floor (Concrete)
-      const groundHeight = 110;
-      c.fillStyle = '#3a3a3a';
-      c.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
-      
-      // Fence Pattern
-      c.strokeStyle = 'rgba(0,0,0,0.5)';
-      c.lineWidth = 2;
-      c.beginPath();
-      for(let x=0; x<canvas.width; x+=40) {
-          c.moveTo(x, canvas.height - groundHeight - 200);
-          c.lineTo(x, canvas.height - groundHeight);
-      }
-      c.stroke();
-      // Crosshatch
-      c.beginPath();
-      for(let y=canvas.height - groundHeight - 200; y < canvas.height - groundHeight; y+=40) {
-          c.moveTo(0, y);
-          c.lineTo(canvas.width, y);
-      }
-      c.stroke();
-
-      if (gameStatus === 'START') {
-          // Draw slow sakura petals on start screen
+      if (gameStatus === 'START' || gameStatus === 'STAGE_SELECT') {
+          // Draw slow sakura petals on start/menu screen
           drawSakura(c, canvas.width, canvas.height);
           return;
       }
@@ -830,7 +906,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       if (timerId.current) clearInterval(timerId.current);
     };
-  }, [gameStatus]);
+  }, [gameStatus, stage]);
 
   function rectCollision({ rect1, rect2 }: { rect1: any; rect2: any }) {
     return (
@@ -844,6 +920,7 @@ export default function App() {
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       {/* HUD */}
+      {gameStatus === 'PLAYING' && (
       <div style={{
           position: 'absolute',
           top: 0,
@@ -939,6 +1016,7 @@ export default function App() {
               )}
           </div>
       </div>
+      )}
       
       {/* CSS Animation for Combo Pulse */}
       <style>{`
@@ -977,15 +1055,9 @@ export default function App() {
                   ANIME CLASH
               </h1>
               <h2 style={{ fontSize: '30px', marginBottom: '50px', color: '#fff', fontStyle: 'italic' }}>SENPAI'S NOTICE</h2>
-              <div style={{ marginBottom: '30px', textAlign: 'center', lineHeight: '2', fontSize: '18px' }}>
-                  <p><span style={{color:'gold'}}>A / D</span> to Dash</p>
-                  <p><span style={{color:'gold'}}>W</span> to Jump</p>
-                  <p><span style={{color:'gold'}}>SPACE</span> to Magical Strike</p>
-                  <p><span style={{color:'#00bfff'}}>S</span> to Block</p>
-                  <p><span style={{color:'#ff69b4'}}>E</span> to Love Beam</p>
-              </div>
+              
               <button 
-                  onClick={initGame}
+                  onClick={() => setGameStatus('STAGE_SELECT')}
                   style={{
                       padding: '15px 50px',
                       fontSize: '30px',
@@ -1000,8 +1072,93 @@ export default function App() {
                   onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff69b4'}
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff1493'}
               >
-                  FIGHT!
+                  START GAME
               </button>
+          </div>
+      )}
+
+      {/* Stage Select (Sitemap) Overlay */}
+      {gameStatus === 'STAGE_SELECT' && (
+          <div style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              zIndex: 20
+          }}>
+              <h1 style={{ 
+                  fontSize: '50px', 
+                  color: '#00bfff', 
+                  fontFamily: '"Bangers", cursive',
+                  marginBottom: '40px',
+                  textShadow: '3px 3px 0 #000'
+              }}>
+                  SELECT STAGE
+              </h1>
+              
+              <div style={{ display: 'flex', gap: '20px' }}>
+                  <div 
+                      onClick={() => { setStage('ROOFTOP'); initGame(); }}
+                      style={{
+                          width: '200px',
+                          height: '120px',
+                          border: '4px solid white',
+                          background: 'linear-gradient(to bottom, #2e1a47, #ffb347)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontFamily: '"Bangers", cursive',
+                          fontSize: '24px',
+                          textShadow: '2px 2px 0 #000',
+                          transform: 'skewX(-5deg)'
+                      }}
+                  >
+                      ROOFTOP
+                  </div>
+                  <div 
+                      onClick={() => { setStage('FOREST'); initGame(); }}
+                      style={{
+                          width: '200px',
+                          height: '120px',
+                          border: '4px solid white',
+                          background: 'linear-gradient(to bottom, #87CEEB, #3b5323)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontFamily: '"Bangers", cursive',
+                          fontSize: '24px',
+                          textShadow: '2px 2px 0 #000',
+                          transform: 'skewX(-5deg)'
+                      }}
+                  >
+                      FOREST
+                  </div>
+                  <div 
+                      onClick={() => { setStage('CITY'); initGame(); }}
+                      style={{
+                          width: '200px',
+                          height: '120px',
+                          border: '4px solid white',
+                          background: 'linear-gradient(to bottom, #050510, #ff00ff)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontFamily: '"Bangers", cursive',
+                          fontSize: '24px',
+                          textShadow: '2px 2px 0 #000',
+                          transform: 'skewX(-5deg)'
+                      }}
+                  >
+                      NEON CITY
+                  </div>
+              </div>
           </div>
       )}
 
@@ -1027,21 +1184,38 @@ export default function App() {
               }}>
                   {winner}
               </h1>
-              <button 
-                  onClick={initGame}
-                  style={{
-                      padding: '15px 40px',
-                      fontSize: '24px',
-                      fontFamily: '"Bangers", cursive',
-                      backgroundColor: 'white',
-                      color: 'black',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase'
-                  }}
-              >
-                  REMATCH
-              </button>
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <button 
+                    onClick={() => { initGame(); }}
+                    style={{
+                        padding: '15px 40px',
+                        fontSize: '24px',
+                        fontFamily: '"Bangers", cursive',
+                        backgroundColor: 'white',
+                        color: 'black',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textTransform: 'uppercase'
+                    }}
+                >
+                    REMATCH
+                </button>
+                <button 
+                    onClick={() => setGameStatus('STAGE_SELECT')}
+                    style={{
+                        padding: '15px 40px',
+                        fontSize: '24px',
+                        fontFamily: '"Bangers", cursive',
+                        backgroundColor: '#4b0082',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textTransform: 'uppercase'
+                    }}
+                >
+                    CHANGE STAGE
+                </button>
+              </div>
           </div>
       )}
     </div>
