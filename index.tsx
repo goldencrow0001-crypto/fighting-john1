@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
 // --- Constants ---
@@ -374,10 +374,13 @@ class Sprite {
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   const [gameStatus, setGameStatus] = useState<GameState>('START');
   const [stage, setStage] = useState<StageType>('ROOFTOP');
   const [winner, setWinner] = useState<string>('');
   const [timer, setTimer] = useState(GAME_DURATION);
+  const [scale, setScale] = useState(1);
   
   const [playerHealth, setPlayerHealth] = useState(100);
   const [enemyHealth, setEnemyHealth] = useState(100);
@@ -406,6 +409,24 @@ export default function App() {
     s: { pressed: false }, // Block
     e: { pressed: false }, // Special
   });
+
+  // Responsive Scale
+  useLayoutEffect(() => {
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      
+      const scaleX = windowWidth / CANVAS_WIDTH;
+      const scaleY = windowHeight / CANVAS_HEIGHT;
+      const newScale = Math.min(scaleX, scaleY) * 0.95; // 0.95 for padding
+      setScale(newScale);
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const initGame = () => {
     const player = new Sprite({
@@ -917,304 +938,417 @@ export default function App() {
     );
   }
 
+  // Mobile Handlers
+  const handleTouchStart = (action: string) => {
+     if (gameStatus !== 'PLAYING') return;
+     const player = playerRef.current;
+     if (!player) return;
+     
+     switch(action) {
+         case 'left': keys.current.a.pressed = true; player.lastKey = 'a'; break;
+         case 'right': keys.current.d.pressed = true; player.lastKey = 'd'; break;
+         case 'jump': player.jump(); break;
+         case 'attack': player.attack(); break;
+         case 'block': keys.current.s.pressed = true; player.block(true); break;
+         case 'special': 
+             const p = player.shoot();
+             if (p) projectilesRef.current.push(p);
+             break;
+     }
+  };
+
+  const handleTouchEnd = (action: string) => {
+     const player = playerRef.current;
+     if (!player) return;
+
+     switch(action) {
+         case 'left': keys.current.a.pressed = false; break;
+         case 'right': keys.current.d.pressed = false; break;
+         case 'block': keys.current.s.pressed = false; player.block(false); break;
+     }
+  };
+
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      {/* HUD */}
-      {gameStatus === 'PLAYING' && (
-      <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          padding: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: 'white',
-          textShadow: '2px 2px 0 #000',
-          zIndex: 10,
-          fontFamily: '"Bangers", cursive',
-          letterSpacing: '2px'
-      }}>
-          {/* Player Health */}
-          <div style={{ position: 'relative', width: '40%' }}>
-              <div style={{ height: '30px', backgroundColor: '#330011', border: '3px solid #ff69b4', transform: 'skewX(-20deg)' }}></div>
-              <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  height: '30px',
-                  width: `${playerHealth}%`,
-                  backgroundColor: '#ff69b4', // Pink
-                  borderRight: '3px solid white',
-                  transform: 'skewX(-20deg)',
-                  transition: 'width 0.1s'
-              }}></div>
-              <div style={{ marginTop: '5px', fontSize: '24px', color: '#ff69b4' }}>SAKURA-CHAN</div>
-              {/* Player Combo */}
-              {playerCombo > 1 && (
-                  <div style={{
-                      position: 'absolute',
-                      top: '60px',
-                      left: '20px',
-                      fontSize: '40px',
-                      color: '#ffdd00',
-                      textShadow: '4px 4px 0px #ff0000',
-                      transform: 'skewX(-10deg)',
-                      animation: 'pulse 0.2s infinite alternate'
-                  }}>
-                      {playerCombo} HITS!
-                  </div>
-              )}
-          </div>
-
-          {/* Timer */}
-          <div style={{ 
-              width: '80px', 
-              height: '80px', 
-              backgroundColor: 'rgba(0,0,0,0.5)', 
-              borderRadius: '50%',
-              border: '4px solid gold',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '40px',
-              color: 'gold'
-          }}>
-              {timer}
-          </div>
-
-          {/* Enemy Health */}
-          <div style={{ position: 'relative', width: '40%', textAlign: 'right' }}>
-              <div style={{ height: '30px', backgroundColor: '#000022', border: '3px solid #4b0082', transform: 'skewX(20deg)' }}></div>
-              <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  height: '30px',
-                  width: `${enemyHealth}%`,
-                  backgroundColor: '#4b0082', // Indigo
-                  borderLeft: '3px solid white',
-                  transform: 'skewX(20deg)',
-                  transition: 'width 0.1s'
-              }}></div>
-              <div style={{ marginTop: '5px', fontSize: '24px', color: '#8a2be2' }}>KENJI-KUN</div>
-               {/* Enemy Combo */}
-               {enemyCombo > 1 && (
-                  <div style={{
-                      position: 'absolute',
-                      top: '60px',
-                      right: '20px',
-                      fontSize: '40px',
-                      color: '#ff00ff',
-                      textShadow: '4px 4px 0px #4b0082',
-                      transform: 'skewX(10deg)',
-                      animation: 'pulse 0.2s infinite alternate'
-                  }}>
-                      {enemyCombo} HITS!
-                  </div>
-              )}
-          </div>
-      </div>
-      )}
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       
-      {/* CSS Animation for Combo Pulse */}
-      <style>{`
-        @keyframes pulse {
-            0% { transform: scale(1) skewX(-10deg); }
-            100% { transform: scale(1.1) skewX(-10deg); }
-        }
-      `}</style>
-
-      <canvas 
-        ref={canvasRef} 
-        style={{ border: '4px solid #fff', boxShadow: '0 0 30px rgba(255, 105, 180, 0.4)' }} 
-      />
-
-      {/* Start Screen Overlay */}
-      {gameStatus === 'START' && (
+      {/* Game Wrapper for Scaling */}
+      <div style={{ position: 'relative', transform: `scale(${scale})`, transformOrigin: 'center center', width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}>
+          
+          {/* HUD */}
+          {gameStatus === 'PLAYING' && (
           <div style={{
               position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(20, 10, 30, 0.85)',
+              top: 0,
+              left: 0,
+              right: 0,
+              padding: '20px',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'space-between',
               color: 'white',
-              zIndex: 20
+              textShadow: '2px 2px 0 #000',
+              zIndex: 10,
+              fontFamily: '"Bangers", cursive',
+              letterSpacing: '2px',
+              pointerEvents: 'none' // Click through HUD
           }}>
-              <h1 style={{ 
-                  fontSize: '60px', 
-                  color: '#ff69b4', 
-                  fontFamily: '"Bangers", cursive',
-                  textShadow: '4px 4px 0 #fff, 8px 8px 0 #4b0082', 
-                  marginBottom: '10px',
-                  letterSpacing: '4px'
-              }}>
-                  ANIME CLASH
-              </h1>
-              <h2 style={{ fontSize: '30px', marginBottom: '50px', color: '#fff', fontStyle: 'italic' }}>SENPAI'S NOTICE</h2>
-              
-              <button 
-                  onClick={() => setGameStatus('STAGE_SELECT')}
-                  style={{
-                      padding: '15px 50px',
-                      fontSize: '30px',
-                      fontFamily: '"Bangers", cursive',
-                      backgroundColor: '#ff1493',
-                      color: 'white',
-                      border: '4px solid white',
-                      cursor: 'pointer',
-                      transform: 'skewX(-10deg)',
-                      boxShadow: '5px 5px 0px rgba(0,0,0,0.5)'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff69b4'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff1493'}
-              >
-                  START GAME
-              </button>
-          </div>
-      )}
+              {/* Player Health */}
+              <div style={{ position: 'relative', width: '40%' }}>
+                  <div style={{ height: '30px', backgroundColor: '#330011', border: '3px solid #ff69b4', transform: 'skewX(-20deg)' }}></div>
+                  <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      height: '30px',
+                      width: `${playerHealth}%`,
+                      backgroundColor: '#ff69b4', // Pink
+                      borderRight: '3px solid white',
+                      transform: 'skewX(-20deg)',
+                      transition: 'width 0.1s'
+                  }}></div>
+                  <div style={{ marginTop: '5px', fontSize: '24px', color: '#ff69b4' }}>SAKURA-CHAN</div>
+                  {/* Player Combo */}
+                  {playerCombo > 1 && (
+                      <div style={{
+                          position: 'absolute',
+                          top: '60px',
+                          left: '20px',
+                          fontSize: '40px',
+                          color: '#ffdd00',
+                          textShadow: '4px 4px 0px #ff0000',
+                          transform: 'skewX(-10deg)',
+                          animation: 'pulse 0.2s infinite alternate'
+                      }}>
+                          {playerCombo} HITS!
+                      </div>
+                  )}
+              </div>
 
-      {/* Stage Select (Sitemap) Overlay */}
-      {gameStatus === 'STAGE_SELECT' && (
-          <div style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.9)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              zIndex: 20
-          }}>
-              <h1 style={{ 
-                  fontSize: '50px', 
-                  color: '#00bfff', 
-                  fontFamily: '"Bangers", cursive',
-                  marginBottom: '40px',
-                  textShadow: '3px 3px 0 #000'
+              {/* Timer */}
+              <div style={{ 
+                  width: '80px', 
+                  height: '80px', 
+                  backgroundColor: 'rgba(0,0,0,0.5)', 
+                  borderRadius: '50%',
+                  border: '4px solid gold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '40px',
+                  color: 'gold'
               }}>
-                  SELECT STAGE
-              </h1>
-              
-              <div style={{ display: 'flex', gap: '20px' }}>
-                  <div 
-                      onClick={() => { setStage('ROOFTOP'); initGame(); }}
-                      style={{
-                          width: '200px',
-                          height: '120px',
-                          border: '4px solid white',
-                          background: 'linear-gradient(to bottom, #2e1a47, #ffb347)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          fontFamily: '"Bangers", cursive',
-                          fontSize: '24px',
-                          textShadow: '2px 2px 0 #000',
-                          transform: 'skewX(-5deg)'
-                      }}
-                  >
-                      ROOFTOP
-                  </div>
-                  <div 
-                      onClick={() => { setStage('FOREST'); initGame(); }}
-                      style={{
-                          width: '200px',
-                          height: '120px',
-                          border: '4px solid white',
-                          background: 'linear-gradient(to bottom, #87CEEB, #3b5323)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          fontFamily: '"Bangers", cursive',
-                          fontSize: '24px',
-                          textShadow: '2px 2px 0 #000',
-                          transform: 'skewX(-5deg)'
-                      }}
-                  >
-                      FOREST
-                  </div>
-                  <div 
-                      onClick={() => { setStage('CITY'); initGame(); }}
-                      style={{
-                          width: '200px',
-                          height: '120px',
-                          border: '4px solid white',
-                          background: 'linear-gradient(to bottom, #050510, #ff00ff)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          fontFamily: '"Bangers", cursive',
-                          fontSize: '24px',
-                          textShadow: '2px 2px 0 #000',
-                          transform: 'skewX(-5deg)'
-                      }}
-                  >
-                      NEON CITY
-                  </div>
+                  {timer}
+              </div>
+
+              {/* Enemy Health */}
+              <div style={{ position: 'relative', width: '40%', textAlign: 'right' }}>
+                  <div style={{ height: '30px', backgroundColor: '#000022', border: '3px solid #4b0082', transform: 'skewX(20deg)' }}></div>
+                  <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      height: '30px',
+                      width: `${enemyHealth}%`,
+                      backgroundColor: '#4b0082', // Indigo
+                      borderLeft: '3px solid white',
+                      transform: 'skewX(20deg)',
+                      transition: 'width 0.1s'
+                  }}></div>
+                  <div style={{ marginTop: '5px', fontSize: '24px', color: '#8a2be2' }}>KENJI-KUN</div>
+                   {/* Enemy Combo */}
+                   {enemyCombo > 1 && (
+                      <div style={{
+                          position: 'absolute',
+                          top: '60px',
+                          right: '20px',
+                          fontSize: '40px',
+                          color: '#ff00ff',
+                          textShadow: '4px 4px 0px #4b0082',
+                          transform: 'skewX(10deg)',
+                          animation: 'pulse 0.2s infinite alternate'
+                      }}>
+                          {enemyCombo} HITS!
+                      </div>
+                  )}
               </div>
           </div>
-      )}
+          )}
+          
+          <style>{`
+            @keyframes pulse {
+                0% { transform: scale(1) skewX(-10deg); }
+                100% { transform: scale(1.1) skewX(-10deg); }
+            }
+          `}</style>
 
-      {/* Game Over Overlay */}
-      {gameStatus === 'GAMEOVER' && (
-          <div style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.9)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              zIndex: 20
-          }}>
-              <h1 style={{ 
-                  fontSize: '70px', 
-                  color: winner.includes('Sakura') ? '#ff69b4' : '#8a2be2', 
-                  fontFamily: '"Bangers", cursive',
-                  textShadow: '3px 3px 0 #fff', 
-                  marginBottom: '30px' 
+          <canvas 
+            ref={canvasRef} 
+            style={{ border: '4px solid #fff', boxShadow: '0 0 30px rgba(255, 105, 180, 0.4)' }} 
+          />
+
+          {/* Start Screen Overlay */}
+          {gameStatus === 'START' && (
+              <div style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(20, 10, 30, 0.85)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  zIndex: 20
               }}>
-                  {winner}
-              </h1>
-              <div style={{ display: 'flex', gap: '20px' }}>
-                <button 
-                    onClick={() => { initGame(); }}
+                  <h1 style={{ 
+                      fontSize: '60px', 
+                      color: '#ff69b4', 
+                      fontFamily: '"Bangers", cursive',
+                      textShadow: '4px 4px 0 #fff, 8px 8px 0 #4b0082', 
+                      marginBottom: '10px',
+                      letterSpacing: '4px'
+                  }}>
+                      ANIME CLASH
+                  </h1>
+                  <h2 style={{ fontSize: '30px', marginBottom: '50px', color: '#fff', fontStyle: 'italic' }}>SENPAI'S NOTICE</h2>
+                  
+                  <button 
+                      onClick={() => setGameStatus('STAGE_SELECT')}
+                      style={{
+                          padding: '15px 50px',
+                          fontSize: '30px',
+                          fontFamily: '"Bangers", cursive',
+                          backgroundColor: '#ff1493',
+                          color: 'white',
+                          border: '4px solid white',
+                          cursor: 'pointer',
+                          transform: 'skewX(-10deg)',
+                          boxShadow: '5px 5px 0px rgba(0,0,0,0.5)'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ff69b4'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff1493'}
+                  >
+                      START GAME
+                  </button>
+              </div>
+          )}
+
+          {/* Stage Select (Sitemap) Overlay */}
+          {gameStatus === 'STAGE_SELECT' && (
+              <div style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  zIndex: 20
+              }}>
+                  <h1 style={{ 
+                      fontSize: '50px', 
+                      color: '#00bfff', 
+                      fontFamily: '"Bangers", cursive',
+                      marginBottom: '40px',
+                      textShadow: '3px 3px 0 #000'
+                  }}>
+                      SELECT STAGE
+                  </h1>
+                  
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div 
+                          onClick={() => { setStage('ROOFTOP'); initGame(); }}
+                          style={{
+                              width: '200px',
+                              height: '120px',
+                              border: '4px solid white',
+                              background: 'linear-gradient(to bottom, #2e1a47, #ffb347)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontFamily: '"Bangers", cursive',
+                              fontSize: '24px',
+                              textShadow: '2px 2px 0 #000',
+                              transform: 'skewX(-5deg)'
+                          }}
+                      >
+                          ROOFTOP
+                      </div>
+                      <div 
+                          onClick={() => { setStage('FOREST'); initGame(); }}
+                          style={{
+                              width: '200px',
+                              height: '120px',
+                              border: '4px solid white',
+                              background: 'linear-gradient(to bottom, #87CEEB, #3b5323)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontFamily: '"Bangers", cursive',
+                              fontSize: '24px',
+                              textShadow: '2px 2px 0 #000',
+                              transform: 'skewX(-5deg)'
+                          }}
+                      >
+                          FOREST
+                      </div>
+                      <div 
+                          onClick={() => { setStage('CITY'); initGame(); }}
+                          style={{
+                              width: '200px',
+                              height: '120px',
+                              border: '4px solid white',
+                              background: 'linear-gradient(to bottom, #050510, #ff00ff)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              fontFamily: '"Bangers", cursive',
+                              fontSize: '24px',
+                              textShadow: '2px 2px 0 #000',
+                              transform: 'skewX(-5deg)'
+                          }}
+                      >
+                          NEON CITY
+                      </div>
+                  </div>
+              </div>
+          )}
+
+          {/* Game Over Overlay */}
+          {gameStatus === 'GAMEOVER' && (
+              <div style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.9)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  zIndex: 20
+              }}>
+                  <h1 style={{ 
+                      fontSize: '70px', 
+                      color: winner.includes('Sakura') ? '#ff69b4' : '#8a2be2', 
+                      fontFamily: '"Bangers", cursive',
+                      textShadow: '3px 3px 0 #fff', 
+                      marginBottom: '30px' 
+                  }}>
+                      {winner}
+                  </h1>
+                  <div style={{ display: 'flex', gap: '20px' }}>
+                    <button 
+                        onClick={() => { initGame(); }}
+                        style={{
+                            padding: '15px 40px',
+                            fontSize: '24px',
+                            fontFamily: '"Bangers", cursive',
+                            backgroundColor: 'white',
+                            color: 'black',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase'
+                        }}
+                    >
+                        REMATCH
+                    </button>
+                    <button 
+                        onClick={() => setGameStatus('STAGE_SELECT')}
+                        style={{
+                            padding: '15px 40px',
+                            fontSize: '24px',
+                            fontFamily: '"Bangers", cursive',
+                            backgroundColor: '#4b0082',
+                            color: 'white',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase'
+                        }}
+                    >
+                        CHANGE STAGE
+                    </button>
+                  </div>
+              </div>
+          )}
+      </div>
+
+      {/* Mobile Controls Overlay */}
+      {gameStatus === 'PLAYING' && (
+          <div style={{
+              position: 'fixed',
+              bottom: '20px',
+              left: '0',
+              right: '0',
+              height: '150px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '0 40px',
+              pointerEvents: 'none', // Allow clicks to pass through empty space
+              zIndex: 100
+          }}>
+              {/* D-Pad */}
+              <div style={{ display: 'flex', gap: '15px', pointerEvents: 'auto' }}>
+                  <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('left'); }}
+                    onMouseDown={() => handleTouchStart('left')}
+                    onTouchEnd={(e) => { e.preventDefault(); handleTouchEnd('left'); }}
+                    onMouseUp={() => handleTouchEnd('left')}
                     style={{
-                        padding: '15px 40px',
-                        fontSize: '24px',
-                        fontFamily: '"Bangers", cursive',
-                        backgroundColor: 'white',
-                        color: 'black',
-                        border: 'none',
-                        cursor: 'pointer',
-                        textTransform: 'uppercase'
-                    }}
-                >
-                    REMATCH
-                </button>
-                <button 
-                    onClick={() => setGameStatus('STAGE_SELECT')}
+                        width: '70px', height: '70px', borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)', border: '2px solid white',
+                        color: 'white', fontSize: '24px', marginTop: '40px'
+                    }}>←</button>
+                  <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('right'); }}
+                    onMouseDown={() => handleTouchStart('right')}
+                    onTouchEnd={(e) => { e.preventDefault(); handleTouchEnd('right'); }}
+                    onMouseUp={() => handleTouchEnd('right')}
                     style={{
-                        padding: '15px 40px',
-                        fontSize: '24px',
-                        fontFamily: '"Bangers", cursive',
-                        backgroundColor: '#4b0082',
-                        color: 'white',
-                        border: 'none',
-                        cursor: 'pointer',
-                        textTransform: 'uppercase'
-                    }}
-                >
-                    CHANGE STAGE
-                </button>
+                        width: '70px', height: '70px', borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)', border: '2px solid white',
+                        color: 'white', fontSize: '24px', marginTop: '40px'
+                    }}>→</button>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', pointerEvents: 'auto' }}>
+                 <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('block'); }}
+                    onMouseDown={() => handleTouchStart('block')}
+                    onTouchEnd={(e) => { e.preventDefault(); handleTouchEnd('block'); }}
+                    onMouseUp={() => handleTouchEnd('block')}
+                    style={{
+                        width: '60px', height: '60px', borderRadius: '50%',
+                        backgroundColor: 'rgba(0, 191, 255, 0.4)', border: '2px solid white',
+                        color: 'white', fontSize: '14px', marginBottom: '10px'
+                    }}>BLK</button>
+                 <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('jump'); }}
+                    onMouseDown={() => handleTouchStart('jump')}
+                    style={{
+                        width: '70px', height: '70px', borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 215, 0, 0.4)', border: '2px solid white',
+                        color: 'white', fontSize: '14px', marginBottom: '40px'
+                    }}>JMP</button>
+                 <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('attack'); }}
+                    onMouseDown={() => handleTouchStart('attack')}
+                    style={{
+                        width: '80px', height: '80px', borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 69, 0, 0.6)', border: '2px solid white',
+                        color: 'white', fontSize: '20px', marginBottom: '20px'
+                    }}>ATK</button>
+                 <button 
+                    onTouchStart={(e) => { e.preventDefault(); handleTouchStart('special'); }}
+                    onMouseDown={() => handleTouchStart('special')}
+                    style={{
+                        width: '50px', height: '50px', borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 105, 180, 0.6)', border: '2px solid white',
+                        color: 'white', fontSize: '12px', marginBottom: '80px'
+                    }}>SPC</button>
               </div>
           </div>
       )}
