@@ -1,12 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-declare global {
-  interface Window {
-    gameContext: CanvasRenderingContext2D;
-  }
-}
-
 // --- Constants ---
 const CANVAS_WIDTH = 1024;
 const CANVAS_HEIGHT = 576;
@@ -55,8 +49,8 @@ class Sprite {
   specialCooldown: number;
   attackFrame: number; 
   hitStun: number;
-  comboCount: number; // New: Track hits
-  comboTimer: number; // New: Track time window
+  comboCount: number; 
+  comboTimer: number; 
   name: string;
   type: 'SAKURA' | 'KENJI';
 
@@ -265,8 +259,8 @@ class Sprite {
       }
   }
 
-  update(canvasWidth: number, canvasHeight: number, groundHeight: number) {
-    this.draw(window.gameContext);
+  update(c: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number, groundHeight: number) {
+    this.draw(c);
 
     if (this.dead) return;
 
@@ -460,14 +454,6 @@ export default function App() {
     }
     
     setGameStatus('PLAYING');
-    
-    if (timerId.current) clearInterval(timerId.current);
-    timerId.current = window.setInterval(() => {
-        if (timerRef.current > 0) {
-            timerRef.current--;
-            setTimer(timerRef.current);
-        }
-    }, 1000);
   };
 
   const createHitParticles = (x: number, y: number, color: string, isBlock: boolean = false) => {
@@ -518,10 +504,20 @@ export default function App() {
     
     const c = canvas.getContext('2d');
     if (!c) return;
-    window.gameContext = c;
 
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
+
+    // Timer Logic
+    if (gameStatus === 'PLAYING') {
+         if (timerId.current) clearInterval(timerId.current);
+         timerId.current = window.setInterval(() => {
+            if (timerRef.current > 0) {
+                timerRef.current--;
+                setTimer(timerRef.current);
+            }
+         }, 1000);
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
         if (gameStatus !== 'PLAYING') return;
@@ -628,7 +624,7 @@ export default function App() {
       player.velocity.x = 0;
       enemy.velocity.x = 0;
 
-      // Player Move (Faster in Anime mode)
+      // Player Move
       if (!player.isBlocking) {
           if (keys.current.a.pressed && player.lastKey === 'a' && player.hitStun === 0) {
             player.velocity.x = -8;
@@ -645,7 +641,6 @@ export default function App() {
           const dist = Math.abs(dx);
           
           if (dist > 300) {
-               // Far away? Maybe shoot projectile
                if (enemy.specialCooldown === 0 && Math.random() < 0.02) {
                    const p = enemy.shoot();
                    if (p) projectilesRef.current.push(p);
@@ -660,7 +655,6 @@ export default function App() {
               enemy.block(false);
           } else {
               enemy.facingRight = dx > 0;
-              // Close combat
               if (player.isAttacking && Math.random() < 0.4) {
                   enemy.block(true);
               } else {
@@ -671,10 +665,10 @@ export default function App() {
           if (Math.random() < 0.01) enemy.jump(); 
       }
 
-      player.update(canvas.width, canvas.height, 110);
-      enemy.update(canvas.width, canvas.height, 110);
+      player.update(c, canvas.width, canvas.height, 110);
+      enemy.update(c, canvas.width, canvas.height, 110);
       
-      // Update Combo State (Sync to UI only on change)
+      // Update Combo State
       if (player.comboCount !== lastPlayerCombo.current) {
           setPlayerCombo(player.comboCount);
           lastPlayerCombo.current = player.comboCount;
@@ -698,13 +692,11 @@ export default function App() {
           c.fill();
           c.shadowBlur = 0;
 
-          // Remove if off screen
           if (p.position.x < 0 || p.position.x > canvas.width) {
               projectilesRef.current.splice(i, 1);
               continue;
           }
 
-          // Collision with Opponent
           const target = p.owner === 'SAKURA' ? enemy : player;
           const shooter = p.owner === 'SAKURA' ? player : enemy;
 
@@ -714,19 +706,15 @@ export default function App() {
               p.position.y + p.radius > target.position.y &&
               p.position.y - p.radius < target.position.y + target.height
           ) {
-              // Projectile hit logic
               let damage = p.damage;
               
               if (!target.isBlocking) {
                   shooter.comboCount++;
-                  shooter.comboTimer = 90; // 1.5s
-                  damage += (shooter.comboCount * 2); // Damage Scaling
-              } else {
-                  // Blocked hit logic? Maybe small chip damage, no combo increment
+                  shooter.comboTimer = 90; 
+                  damage += (shooter.comboCount * 2);
               }
               
               target.takeDamage(damage);
-              
               createHitParticles(p.position.x, p.position.y, p.color, target.isBlocking);
               if (p.owner === 'SAKURA') setEnemyHealth(target.health);
               else setPlayerHealth(target.health);
@@ -736,8 +724,6 @@ export default function App() {
       }
 
       // --- Melee Collision ---
-      
-      // Player Hit Enemy
       if (
         player.isAttacking &&
         player.attackFrame === 10 && 
@@ -748,19 +734,18 @@ export default function App() {
         if (!enemy.isBlocking) {
              player.comboCount++;
              player.comboTimer = 90;
-             dmg += Math.floor(player.comboCount * 1.5); // Combo Damage Bonus
+             dmg += Math.floor(player.comboCount * 1.5); 
         }
 
         enemy.takeDamage(dmg);
         if (!enemy.isBlocking) {
             enemy.velocity.y = -8; 
-            enemy.velocity.x = player.facingRight ? 15 : -15; // Big Knockback
+            enemy.velocity.x = player.facingRight ? 15 : -15; 
         }
         setEnemyHealth(enemy.health);
         createHitParticles(enemy.position.x + enemy.width/2, enemy.position.y + 40, '#ff00ff', enemy.isBlocking);
       }
 
-      // Enemy Hit Player
       if (
         enemy.isAttacking &&
         enemy.attackFrame === 10 &&
@@ -812,7 +797,6 @@ export default function App() {
          c.globalAlpha = 1.0;
       }
 
-      // Draw Sakura Petals (Foreground)
       drawSakura(c, canvas.width, canvas.height);
 
       if (enemy.health <= 0 || player.health <= 0 || timerRef.current <= 0) {
